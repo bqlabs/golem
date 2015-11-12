@@ -16,11 +16,7 @@ NORMALIZE_MINUS_ONE_dB = 10 ** (-1.0 / 20)
 RATE = 44100
 CHANNELS = 1
 TRIM_APPEND = RATE / 4
-
-
-def is_silent(data_chunk):
-    """Returns 'True' if below the 'silent' threshold"""
-    return max(data_chunk) < THRESHOLD
+audio_manager = pyaudio.PyAudio()
 
 
 def normalize(data_all):
@@ -51,30 +47,30 @@ def trim(data_all):
     return copy.deepcopy(data_all[_from:(_to + 1)])
 
 
-def record():
+def record(routine=None):
     """Record a word or words from the microphone and
     return the data as an array of signed shorts."""
-
-    p = pyaudio.PyAudio()
-    stream = p.open(format=FORMAT,
-                    channels=CHANNELS,
-                    rate=RATE,
-                    input=True,
-                    output=True,
-                    frames_per_buffer=CHUNK_SIZE)
+    stream = audio_manager.open(format=FORMAT,
+                                channels=CHANNELS,
+                                rate=RATE,
+                                input=True,
+                                output=True,
+                                frames_per_buffer=CHUNK_SIZE)
 
     silent_chunks = 0
     audio_started = False
     data_all = array('h')
 
     while True:
+        if routine:
+            routine()
         # little endian, signed short
         data_chunk = array('h', stream.read(CHUNK_SIZE))
         if byteorder == 'big':
             data_chunk.byteswap()
         data_all.extend(data_chunk)
 
-        silent = is_silent(data_chunk)
+        silent = max(data_chunk) < THRESHOLD
 
         if audio_started:
             if silent:
@@ -86,20 +82,23 @@ def record():
         elif not silent:
             audio_started = True
 
-    sample_width = p.get_sample_size(FORMAT)
+    sample_width = audio_manager.get_sample_size(FORMAT)
     stream.stop_stream()
     stream.close()
-    p.terminate()
 
     data_all = trim(data_all)
     data_all = normalize(data_all)
     return sample_width, data_all
 
 
+def close():
+    audio_manager.terminate()
+
+
 def record_to_file(path):
     "Records from the microphone and outputs the resulting data to 'path'"
     try:
-        sample_width, data = record()
+        sample_width, data = record(routine=None)
         data = pack('<' + ('h' * len(data)), *data)
 
         wave_file = wave.open(path, 'wb')
@@ -108,5 +107,7 @@ def record_to_file(path):
         wave_file.setframerate(RATE)
         wave_file.writeframes(data)
         wave_file.close()
+    except KeyboardInterrupt:
+        raise KeyboardInterrupt()
     except:
         raise GolemException()
