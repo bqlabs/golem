@@ -1,48 +1,58 @@
-from golem.audio_recorder import record_to_file
+# coding=utf-8
+
+from golem.communication import audio_recorder
 import os
-from golem.speech_to_text import wav_to_text
+from golem.communication.speech_to_text import wav_to_text
 from golem.error import GolemException
+from golem.communication.language_processor import TextProccess
 from espeak import espeak
-import socket
-import json
+from golem.core.golem import Golem
+from time import sleep
 
 
-if __name__ == '__main__':
-    wav_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "voice.wav")
-    mp3_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "voice.mp3")
+wav_file_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "voice.wav")
 
-    s = socket.socket()
-    ip = "172.16.17.136"
-    port = 5033
-    s.connect((ip, port))
-    while True:
+
+def speak(text):
+    espeak.synth(text)
+    while espeak.is_playing():
+        pass
+    sleep(0.1)
+
+
+def golem(speaker=False):
+    print "Despertando al Golem ...\n\n"
+    espeak.set_voice('spanish')
+    text_proccess = TextProccess()
+    speak("Golem despierto")
+    golem = Golem()
+    while not golem.name:
         try:
-            record_to_file(wav_file_path)
+            speak('Como me llamo?')
+            audio_recorder.record_to_file(wav_file_path)
             text = wav_to_text(wav_file_path)
-            x = 0
-            y = 0
-            w = 0
-            print text
-            if text == 'alante':
-                x = 0.2
-            if text == 'atrás'.decode('utf-8', 'ignore'):
-                x = -0.2
-            if text == 'derecha':
-                y = 0.2
-            if text == 'izquierda'.decode('utf-8', 'ignore'):
-                y = -0.2
-            print x, y
-    #         espeak.set_voice('spanish')
-    #         espeak.synth(text)
-    #         while espeak.is_playing():
-    #             pass
-            s.send(json.dumps({'x': x,
-                               'y': y,
-                               'w': 0}))
+            result = text_proccess.text_proccess(text)
+            if not golem.name:
+                golem.name = text
         except GolemException:
             pass
         except KeyboardInterrupt:
             break
+    speak('Me llamo %s' % golem.name)
+    while True:
+        try:
+            audio_recorder.record_to_file(wav_file_path)
+            text = wav_to_text(wav_file_path)
+            result = text_proccess.text_proccess(text)
+            print result
+            # 'option'.decode('utf-8', 'ignore'):
+            if speaker:
+                speak(text)
+        except GolemException:
+            pass
+        except KeyboardInterrupt:
+            break
+    audio_recorder.close()
 
-    s.send('quit')
-    s.close()
+if __name__ == '__main__':
+    golem()
