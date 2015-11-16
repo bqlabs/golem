@@ -109,5 +109,5 @@ def record_to_file(path):
         wave_file.close()
     except KeyboardInterrupt:
         raise KeyboardInterrupt()
-    except:
-        raise GolemException()
+    except Exception as e:
+        raise GolemException(e.message)
